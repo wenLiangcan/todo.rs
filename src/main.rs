@@ -216,7 +216,7 @@ impl<'p> TodoList<'p> {
 
 fn main() {
     let args = App::new("todo")
-                        .version("0.0.1")
+                        .version("0.1.0")
                         .about("CLI Todo-List Tool")
                         .settings(&[AppSettings::SubcommandsNegateReqs,
                                     AppSettings::VersionlessSubcommands])
