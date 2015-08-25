@@ -1,0 +1,9 @@
+[package]
+name = "todo"
+version = "0.1.0"
+authors = ["wenLiangcan <boxeed@gmail.com>"]
+
+[dependencies]
+ansi_term = "*"
+clap = "1.2.3"
+regex = "0.1.8"
