@@ -138,7 +138,7 @@ impl<'p> TodoList<'p> {
             let reader = BufReader::new(&f);
             let list: Vec<Task> = reader.lines().map(|l| {
                 match l {
-                    Ok(s) => Task::from_str(&s[..]).unwrap(),
+                    Ok(s) => s.parse::<Task>().unwrap(),
                     Err(e) => panic!("{}", Error::description(&e)),
                 }}).collect();
             TodoList {
