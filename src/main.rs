@@ -49,25 +49,20 @@ struct Task {
 
 impl Task {
     fn new(note: &str) -> Self {
-        Task {
-            status: Status::Todo,
-            note: note.to_string()
-        }
+        Task { status: Status::Todo, note: note.to_string() }
     }
 
     fn check(&mut self) {
         match self.status {
-            Status::Todo =>
-                self.status = Status::Done,
-            _ => {},
+            Status::Todo => self.status = Status::Done,
+            _ => {}
         }
     }
 
     fn undo(&mut self) {
         match self.status {
-            Status::Done =>
-                self.status = Status::Todo,
-            _ => {},
+            Status::Done => self.status = Status::Todo,
+            _ => {}
         }
     }
 }
@@ -81,15 +76,14 @@ impl FromStr for Task {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let re = Regex::new(r"^- \[([\sx])\] (.*)$").unwrap();
         match re.captures(s) {
-            Some(cap) =>
-                Ok(Task {
-                    note: cap.at(2).unwrap().to_string(),
-                    status: match cap.at(1) {
+            Some(cap) => Ok(Task {
+                note: cap.at(2).unwrap().to_string(),
+                status: match cap.at(1) {
                         Some("x") => Status::Done,
                         Some(" ") => Status::Todo,
                         _ => panic!("Unkown status"),
-                    }
-                }),
+                    },
+            }),
             None => Err(TaskParseError),
         }
     }
@@ -108,9 +102,10 @@ impl fmt::Display for Task {
 }
 
 fn filter_print_lines<I, F>(iter: I, f: F)
-                     where I: Iterator,
-                           I::Item: fmt::Display,
-                           F: Fn(&I::Item) -> bool {
+    where I: Iterator,
+          I::Item: fmt::Display,
+          F: Fn(&I::Item) -> bool
+{
 
     for (i, t) in iter.enumerate().filter(|pair| {
         match pair {
@@ -184,8 +179,8 @@ impl<'p> TodoList<'p> {
             Some(_) => {
                 self.list.remove(index - 1);
                 self.save();
-            },
-            _ => {},
+            }
+            _ => {}
         }
     }
 
@@ -203,10 +198,13 @@ impl<'p> TodoList<'p> {
     }
 
     fn print_unchecked(&self) {
-        filter_print_lines(self.list.iter(), |&t| match t {
-            &Task {status: Status::Todo, ..} => true,
-            _ => false,
-        });
+        filter_print_lines(self.list.iter(),
+                           |&t| {
+                               match t {
+                                   &Task {status: Status::Todo, ..} => true,
+                                   _ => false,
+                               }
+                           });
     }
 
     fn print_all(&self) {
@@ -257,23 +255,22 @@ fn main() {
     }
 
     match args.subcommand() {
-        ("ls", Some(matches))   =>
-            if matches.is_present("list all") {
-                todo_list.print_all();
-                return
-            },
-        ("cleanup", Some(_))    => todo_list.cleanup(),
-        ("clear", Some(_))      => todo_list.clear(),
+        ("ls", Some(matches)) => if matches.is_present("list all") {
+            todo_list.print_all();
+            return
+        },
+        ("cleanup", Some(_)) => todo_list.cleanup(),
+        ("clear", Some(_)) => todo_list.clear(),
         (action, Some(matches)) => {
             let i = value_t_or_exit!(matches.value_of("index"), usize);
             match action {
                 "remove" => todo_list.remove(i),
-                "check"  => todo_list.check(i),
-                "undo"   => todo_list.undo(i),
-                _        => {},
+                "check" => todo_list.check(i),
+                "undo" => todo_list.undo(i),
+                _ => {}
             }
-        },
-        _ => {},
+        }
+        _ => {}
     };
 
     todo_list.print_unchecked();
