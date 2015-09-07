@@ -117,7 +117,7 @@ fn filter_print_lines<I, F>(iter: I, f: F)
             &(_, ref t) => f(t)
         }
     }) {
-        println!("{} {}",
+        println!(" {} {}",
                  Style::default().dimmed().paint(&format!("{}.", i+1)[..]), t);
     }
 }
