@@ -1,3 +1,7 @@
+#![feature(plugin)]
+
+#![plugin(clippy)]
+
 use std::str::FromStr;
 use std::path::Path;
 use std::io::prelude::*;
@@ -26,18 +30,18 @@ enum Status {
 
 impl fmt::Debug for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Status::Done => write!(f, "x"),
-            &Status::Todo => write!(f, " "),
+        match *self {
+            Status::Done => write!(f, "x"),
+            Status::Todo => write!(f, " "),
         }
     }
 }
 
 impl fmt::Display for Status {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &Status::Done => write!(f, "{}", Green.paint("✓")),
-            &Status::Todo => write!(f, "{}", Red.paint("✖")),
+        match *self {
+            Status::Done => write!(f, "{}", Green.paint("✓")),
+            Status::Todo => write!(f, "{}", Red.paint("✖")),
         }
     }
 }
@@ -49,20 +53,18 @@ struct Task {
 
 impl Task {
     fn new(note: &str) -> Self {
-        Task { status: Status::Todo, note: note.to_string() }
+        Task { status: Status::Todo, note: note.to_owned() }
     }
 
     fn check(&mut self) {
-        match self.status {
-            Status::Todo => self.status = Status::Done,
-            _ => {}
+        if let Status::Todo = self.status {
+            self.status = Status::Done;
         }
     }
 
     fn undo(&mut self) {
-        match self.status {
-            Status::Done => self.status = Status::Todo,
-            _ => {}
+        if let Status::Done = self.status {
+            self.status = Status::Todo;
         }
     }
 }
@@ -77,7 +79,7 @@ impl FromStr for Task {
         let re = Regex::new(r"^- \[([\sx])\] (.*)$").unwrap();
         match re.captures(s) {
             Some(cap) => Ok(Task {
-                note: cap.at(2).unwrap().to_string(),
+                note: cap.at(2).unwrap().to_owned(),
                 status: match cap.at(1) {
                         Some("x") => Status::Done,
                         Some(" ") => Status::Todo,
@@ -108,8 +110,8 @@ fn filter_print_lines<I, F>(iter: I, f: F)
 {
 
     for (i, t) in iter.enumerate().filter(|pair| {
-        match pair {
-            &(_, ref t) => f(t)
+        match *pair {
+            (_, ref t) => f(t)
         }
     }) {
         println!(" {} {}",
@@ -175,18 +177,15 @@ impl<'p> TodoList<'p> {
     }
 
     fn remove(&mut self, index: usize) {
-        match self.list.get(index - 1) {
-            Some(_) => {
-                self.list.remove(index - 1);
-                self.save();
-            }
-            _ => {}
+        if let Some(_) = self.list.get(index - 1) {
+            self.list.remove(index - 1);
+            self.save();
         }
     }
 
     fn cleanup(&mut self) {
-        self.list.retain(|task| match task {
-            &Task {status: Status::Todo, ..} => true,
+        self.list.retain(|task| match *task {
+            Task {status: Status::Todo, ..} => true,
             _ => false,
         });
         self.save();
@@ -200,8 +199,8 @@ impl<'p> TodoList<'p> {
     fn print_unchecked(&self) {
         filter_print_lines(self.list.iter(),
                            |&t| {
-                               match t {
-                                   &Task {status: Status::Todo, ..} => true,
+                               match *t {
+                                   Task {status: Status::Todo, ..} => true,
                                    _ => false,
                                }
                            });
@@ -212,6 +211,7 @@ impl<'p> TodoList<'p> {
     }
 }
 
+#[allow(str_to_string)]  // omit the warning of `str_to_string` caused by `clap`
 fn main() {
     let args = App::new("todo")
                         .version("0.1.0")
