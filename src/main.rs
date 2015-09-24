@@ -1,6 +1,6 @@
-#![feature(plugin)]
-
-#![plugin(clippy)]
+// #![feature(plugin)]
+//
+// #![plugin(clippy)]
 
 use std::str::FromStr;
 use std::path::Path;
@@ -23,48 +23,59 @@ use ansi_term::Style;
 extern crate clap;
 use clap::{App, Arg, SubCommand, AppSettings};
 
-enum Status {
-    Done,
-    Todo,
-}
-
-impl fmt::Debug for Status {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Status::Done => write!(f, "x"),
-            Status::Todo => write!(f, " "),
-        }
-    }
-}
-
-impl fmt::Display for Status {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Status::Done => write!(f, "{}", Green.paint("✓")),
-            Status::Todo => write!(f, "{}", Red.paint("✖")),
-        }
-    }
-}
-
-struct Task {
-    status: Status,
+struct TaskData {
     note: String,
+}
+
+impl fmt::Display for TaskData {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.note)
+    }
+}
+
+enum Task {
+    DoneTask(TaskData),
+    TodoTask(TaskData),
+}
+
+impl fmt::Debug for Task {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Task::DoneTask(ref task_data) => write!(f, "- [x] {}", task_data),
+            Task::TodoTask(ref task_data) => write!(f, "- [ ] {}", task_data),
+        }
+    }
+}
+
+impl fmt::Display for Task {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Task::DoneTask(ref task_data) => write!(f, "{} {}", Green.paint("✓"), task_data),
+            Task::TodoTask(ref task_data) => write!(f, "{} {}", Red.paint("✖"), task_data),
+        }
+    }
 }
 
 impl Task {
     fn new(note: &str) -> Self {
-        Task { status: Status::Todo, note: note.to_owned() }
+        Task::TodoTask(
+            TaskData {
+                note: note.to_owned(),
+            }
+        )
     }
 
-    fn check(&mut self) {
-        if let Status::Todo = self.status {
-            self.status = Status::Done;
+    fn check(self) -> Self {
+        match self {
+            Task::TodoTask(task_data) => Task::DoneTask(task_data),
+            Task::DoneTask(_) => self,
         }
     }
 
-    fn undo(&mut self) {
-        if let Status::Done = self.status {
-            self.status = Status::Todo;
+    fn undo(self) -> Self {
+        match self {
+            Task::DoneTask(task_data) => Task::TodoTask(task_data),
+            Task::TodoTask(_) => self,
         }
     }
 }
@@ -78,28 +89,20 @@ impl FromStr for Task {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let re = Regex::new(r"^- \[([\sx])\] (.*)$").unwrap();
         match re.captures(s) {
-            Some(cap) => Ok(Task {
-                note: cap.at(2).unwrap().to_owned(),
-                status: match cap.at(1) {
-                        Some("x") => Status::Done,
-                        Some(" ") => Status::Todo,
+            Some(cap) => {
+                let task_data = TaskData{
+                    note: cap.at(2).unwrap().to_owned()
+                };
+                Ok(
+                    match cap.at(1) {
+                        Some("x") => Task::DoneTask(task_data),
+                        Some(" ") => Task::TodoTask(task_data),
                         _ => panic!("Unkown status"),
-                    },
-            }),
+                    }
+                )
+            },
             None => Err(TaskParseError),
         }
-    }
-}
-
-impl fmt::Debug for Task {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "- [{:?}] {}", self.status, self.note)
-    }
-}
-
-impl fmt::Display for Task {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.status, self.note)
     }
 }
 
@@ -117,6 +120,10 @@ fn filter_print_lines<I, F>(iter: I, f: F)
         println!(" {} {}",
                  Style::default().dimmed().paint(&format!("{}.", i+1)[..]), t);
     }
+}
+
+fn check_vec_bounds<T>(v: &[T], index: usize) -> bool {
+    v.get(index).map_or(false, |_| true)
 }
 
 struct TodoList<'p> {
@@ -165,27 +172,34 @@ impl<'p> TodoList<'p> {
     }
 
     fn check(&mut self, index: usize) {
-        self.list.get_mut(index - 1)
-                 .map(|t| t.check())
-                 .and_then::<(), _>(|_| {self.save(); None});
+        let i = index - 1;
+        if check_vec_bounds(&self.list, i) {
+            let t = self.list.remove(i);
+            self.list.insert(i, t.check());
+            self.save();
+        }
     }
 
     fn undo(&mut self, index: usize) {
-        self.list.get_mut(index - 1)
-                 .map(|t| t.undo())
-                 .and_then::<(), _>(|_| {self.save(); None});
+        let i = index - 1;
+        if check_vec_bounds(&self.list, i) {
+            let t = self.list.remove(i);
+            self.list.insert(i, t.undo());
+            self.save();
+        }
     }
 
     fn remove(&mut self, index: usize) {
-        if let Some(_) = self.list.get(index - 1) {
-            self.list.remove(index - 1);
+        let i = index - 1;
+        if check_vec_bounds(&self.list, i) {
+            self.list.remove(i);
             self.save();
         }
     }
 
     fn cleanup(&mut self) {
         self.list.retain(|task| match *task {
-            Task {status: Status::Todo, ..} => true,
+            Task::TodoTask(_) => true,
             _ => false,
         });
         self.save();
@@ -200,7 +214,7 @@ impl<'p> TodoList<'p> {
         filter_print_lines(self.list.iter(),
                            |&t| {
                                match *t {
-                                   Task {status: Status::Todo, ..} => true,
+                                   Task::TodoTask(_) => true,
                                    _ => false,
                                }
                            });
@@ -211,7 +225,7 @@ impl<'p> TodoList<'p> {
     }
 }
 
-#[allow(str_to_string)]  // omit the warning of `str_to_string` caused by `clap`
+// #[allow(str_to_string)]  // omit the warning of `str_to_string` caused by `clap`
 fn main() {
     let args = App::new("todo")
                         .version("0.1.0")
