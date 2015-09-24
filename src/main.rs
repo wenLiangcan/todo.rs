@@ -228,7 +228,7 @@ impl<'p> TodoList<'p> {
 // #[allow(str_to_string)]  // omit the warning of `str_to_string` caused by `clap`
 fn main() {
     let args = App::new("todo")
-                        .version("0.1.0")
+                        .version("0.2.0")
                         .about("CLI Todo-List Tool")
                         .settings(&[AppSettings::SubcommandsNegateReqs,
                                     AppSettings::VersionlessSubcommands])
