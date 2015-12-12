@@ -5,6 +5,6 @@ authors = ["wenLiangcan <boxeed@gmail.com>"]
 
 [dependencies]
 ansi_term = "*"
-clap = "1.2.3"
-regex = "0.1.8"
-# clippy = "*"
+clap = "1.5.3"
+regex = "0.1.43"
+clippy = "*"
