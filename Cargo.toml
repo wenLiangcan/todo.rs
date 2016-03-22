@@ -7,4 +7,4 @@ authors = ["wenLiangcan <boxeed@gmail.com>"]
 ansi_term = "*"
 clap = "1.5.3"
 regex = "0.1.43"
-clippy = "*"
+clippy = {version = "*", optional = true}
