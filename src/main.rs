@@ -1,6 +1,6 @@
-#![feature(plugin)]
+#![cfg_attr(feature="clippy", feature(plugin))]
 
-#![plugin(clippy)]
+#![cfg_attr(feature="clippy", plugin(clippy))]
 
 use std::str::FromStr;
 use std::path::Path;
@@ -90,16 +90,17 @@ impl FromStr for Task {
         let re = Regex::new(r"^- \[([\sx])\] (.*)$").unwrap();
         match re.captures(s) {
             Some(cap) => {
-                let task_data = TaskData{
-                    note: cap.at(2).unwrap().to_owned()
-                };
-                Ok(
-                    match cap.at(1) {
-                        Some("x") => Task::DoneTask(task_data),
-                        Some(" ") => Task::TodoTask(task_data),
-                        _ => panic!("Unkown status"),
+                cap.at(2).map(|n| {
+                    TaskData {
+                        note: n.to_owned()
                     }
-                )
+                }).and_then(|task_data| {
+                    match cap.at(1) {
+                        Some("x") => Some(Task::DoneTask(task_data)),
+                        Some(" ") => Some(Task::TodoTask(task_data)),
+                        _ => None,
+                    }
+                }).ok_or(TaskParseError)
             },
             None => Err(TaskParseError),
         }
@@ -135,14 +136,16 @@ impl<'p> TodoList<'p> {
     fn load(path: &'p Path) -> Result<Self, io::Error> {
         let file = OpenOptions::new()
                     .read(true)
+                    .write(true)
                     .create(true)
-                    .open(path);
+                    .open(&path);
 
         file.map(|f| {
             let reader = BufReader::new(&f);
-            let list: Vec<Task> = reader.lines().map(|l| {
+            let list: Vec<Task> = reader.lines().enumerate().map(|(i, l)| {
                 match l {
-                    Ok(s) => s.parse::<Task>().unwrap(),
+                    Ok(s) => s.parse::<Task>().expect(
+                        &format!("Failed to parse line {}", i)),
                     Err(e) => panic!("{}", Error::description(&e)),
                 }}).collect();
             TodoList {
@@ -259,10 +262,8 @@ fn main() {
                                     .about("Clear all tasks"))
                     .get_matches();
 
-    let pbf = &mut env::home_dir().unwrap();
-    pbf.push("todo.txt");
-    let path = pbf.as_path();
-    let mut todo_list = TodoList::load(path).unwrap();
+    let path = env::home_dir().unwrap().join("todo.txt");
+    let mut todo_list = TodoList::load(&path).unwrap();
 
     if let Some(task) = args.value_of("task") {
         todo_list.add(task);
