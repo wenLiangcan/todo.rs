@@ -1,27 +1,22 @@
-#![cfg_attr(feature="clippy", feature(plugin))]
+#![cfg_attr(feature = "clippy", feature(plugin))]
+#![cfg_attr(feature = "clippy", plugin(clippy))]
 
-#![cfg_attr(feature="clippy", plugin(clippy))]
-
-use std::str::FromStr;
-use std::path::Path;
+use std::fmt;
+use std::fs::OpenOptions;
+use std::io;
 use std::io::prelude::*;
 use std::io::BufReader;
-use std::io;
-use std::fs::OpenOptions;
-use std::fmt;
-use std::env;
-use std::error::Error;
+use std::path::Path;
+use std::str::FromStr;
 
-extern crate regex;
 use regex::Regex;
 
-extern crate ansi_term;
 use ansi_term::Colour::*;
 use ansi_term::Style;
 
 #[macro_use]
 extern crate clap;
-use clap::{App, Arg, SubCommand, AppSettings};
+use clap::{App, AppSettings, Arg, SubCommand};
 
 struct TaskData {
     note: String,
@@ -40,29 +35,27 @@ enum Task {
 
 impl fmt::Debug for Task {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Task::DoneTask(ref task_data) => write!(f, "- [x] {}", task_data),
-            Task::TodoTask(ref task_data) => write!(f, "- [ ] {}", task_data),
+        match self {
+            Task::DoneTask(task_data) => write!(f, "- [x] {}", task_data),
+            Task::TodoTask(task_data) => write!(f, "- [ ] {}", task_data),
         }
     }
 }
 
 impl fmt::Display for Task {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Task::DoneTask(ref task_data) => write!(f, "{} {}", Green.paint("✓"), task_data),
-            Task::TodoTask(ref task_data) => write!(f, "{} {}", Red.paint("✖"), task_data),
+        match self {
+            Task::DoneTask(task_data) => write!(f, "{} {}", Green.paint("✓"), task_data),
+            Task::TodoTask(task_data) => write!(f, "{} {}", Red.paint("✖"), task_data),
         }
     }
 }
 
 impl Task {
     fn new(note: &str) -> Self {
-        Task::TodoTask(
-            TaskData {
-                note: note.to_owned(),
-            }
-        )
+        Task::TodoTask(TaskData {
+            note: note.to_owned(),
+        })
     }
 
     fn check(self) -> Self {
@@ -89,37 +82,36 @@ impl FromStr for Task {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let re = Regex::new(r"^- \[([\sx])\] (.*)$").unwrap();
         match re.captures(s) {
-            Some(cap) => {
-                cap.at(2).map(|n| {
-                    TaskData {
-                        note: n.to_owned()
-                    }
-                }).and_then(|task_data| {
-                    match cap.at(1) {
-                        Some("x") => Some(Task::DoneTask(task_data)),
-                        Some(" ") => Some(Task::TodoTask(task_data)),
-                        _ => None,
-                    }
-                }).ok_or(TaskParseError)
-            },
+            Some(cap) => cap
+                .get(2)
+                .map(|n| TaskData {
+                    note: n.as_str().to_string(),
+                })
+                .and_then(|task_data| match cap.get(1).map(|m| m.as_str()) {
+                    Some("x") => Some(Task::DoneTask(task_data)),
+                    Some(" ") => Some(Task::TodoTask(task_data)),
+                    _ => None,
+                })
+                .ok_or(TaskParseError),
             None => Err(TaskParseError),
         }
     }
 }
 
 fn filter_print_lines<I, F>(iter: I, f: F)
-    where I: Iterator,
-          I::Item: fmt::Display,
-          F: Fn(&I::Item) -> bool
+where
+    I: Iterator,
+    I::Item: fmt::Display,
+    F: Fn(&I::Item) -> bool,
 {
-
-    for (i, t) in iter.enumerate().filter(|pair| {
-        match *pair {
-            (_, ref t) => f(t)
-        }
+    for (i, t) in iter.enumerate().filter(|pair| match pair {
+        (_, t) => f(t),
     }) {
-        println!(" {} {}",
-                 Style::default().dimmed().paint(&format!("{}.", i+1)[..]), t);
+        println!(
+            " {} {}",
+            Style::default().dimmed().paint(&format!("{}.", i + 1)[..]),
+            t
+        );
     }
 }
 
@@ -135,19 +127,23 @@ struct TodoList<'p> {
 impl<'p> TodoList<'p> {
     fn load(path: &'p Path) -> Result<Self, io::Error> {
         let file = OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .create(true)
-                    .open(&path);
+            .read(true)
+            .write(true)
+            .create(true)
+            .open(&path);
 
         file.map(|f| {
-            let reader = BufReader::new(&f);
-            let list: Vec<Task> = reader.lines().enumerate().map(|(i, l)| {
-                match l {
-                    Ok(s) => s.parse::<Task>().expect(
-                        &format!("Failed to parse line {}", i)),
-                    Err(e) => panic!("{}", Error::description(&e)),
-                }}).collect();
+            let reader = BufReader::new(f);
+            let list: Vec<Task> = reader
+                .lines()
+                .enumerate()
+                .map(|(i, l)| match l {
+                    Ok(s) => s
+                        .parse::<Task>()
+                        .expect(&format!("Failed to parse line {}", i)),
+                    Err(e) => panic!("{:#?}", e),
+                })
+                .collect();
             TodoList {
                 path: path,
                 list: list,
@@ -157,11 +153,11 @@ impl<'p> TodoList<'p> {
 
     fn save(&self) {
         let mut file = OpenOptions::new()
-                           .truncate(true)
-                           .create(true)
-                           .write(true)
-                           .open(self.path)
-                           .unwrap();
+            .truncate(true)
+            .create(true)
+            .write(true)
+            .open(self.path)
+            .unwrap();
 
         for l in &self.list {
             writeln!(file, "{:?}", l).unwrap();
@@ -201,7 +197,7 @@ impl<'p> TodoList<'p> {
     }
 
     fn cleanup(&mut self) {
-        self.list.retain(|task| match *task {
+        self.list.retain(|task| match task {
             Task::TodoTask(_) => true,
             _ => false,
         });
@@ -214,13 +210,10 @@ impl<'p> TodoList<'p> {
     }
 
     fn print_unchecked(&self) {
-        filter_print_lines(self.list.iter(),
-                           |&t| {
-                               match *t {
-                                   Task::TodoTask(_) => true,
-                                   _ => false,
-                               }
-                           });
+        filter_print_lines(self.list.iter(), |t| match t {
+            Task::TodoTask(_) => true,
+            _ => false,
+        });
     }
 
     fn print_all(&self) {
@@ -228,41 +221,49 @@ impl<'p> TodoList<'p> {
     }
 }
 
-#[allow(str_to_string)]  // omit the warning of `str_to_string` caused by `clap`
 fn main() {
     let args = App::new("todo")
-                        .version("0.2.0")
-                        .about("CLI Todo-List Tool")
-                        .settings(&[AppSettings::SubcommandsNegateReqs,
-                                    AppSettings::VersionlessSubcommands])
-                        .arg(Arg::with_name("task")
-                             .required(true)
-                             .index(1)
-                             .help("Add a new task"))
-                        .subcommand(SubCommand::with_name("ls")
-                                    .about("List unchecked tasks")
-                                    .arg(Arg::with_name("list all")
-                                         .long("all")
-                                         .help("List all tasks")))
-                        .subcommand(SubCommand::with_name("remove")
-                                    .about("Remove a task by index")
-                                    .arg(Arg::with_name("index")
-                                         .required(true)))
-                        .subcommand(SubCommand::with_name("check")
-                                    .about("Check a task by index")
-                                    .arg(Arg::with_name("index")
-                                         .required(true)))
-                        .subcommand(SubCommand::with_name("undo")
-                                    .about("Undo a task by index")
-                                    .arg(Arg::with_name("index")
-                                         .required(true)))
-                        .subcommand(SubCommand::with_name("cleanup")
-                                    .about("Clear checked tasks"))
-                        .subcommand(SubCommand::with_name("clear")
-                                    .about("Clear all tasks"))
-                    .get_matches();
+        .version("0.2.0")
+        .about("CLI Todo-List Tool")
+        .settings(&[
+            AppSettings::SubcommandsNegateReqs,
+            AppSettings::VersionlessSubcommands,
+        ])
+        .arg(
+            Arg::with_name("task")
+                .required(true)
+                .index(1)
+                .help("Add a new task"),
+        )
+        .subcommand(
+            SubCommand::with_name("ls")
+                .about("List unchecked tasks")
+                .arg(
+                    Arg::with_name("list all")
+                        .long("all")
+                        .help("List all tasks"),
+                ),
+        )
+        .subcommand(
+            SubCommand::with_name("remove")
+                .about("Remove a task by index")
+                .arg(Arg::with_name("index").required(true)),
+        )
+        .subcommand(
+            SubCommand::with_name("check")
+                .about("Check a task by index")
+                .arg(Arg::with_name("index").required(true)),
+        )
+        .subcommand(
+            SubCommand::with_name("undo")
+                .about("Undo a task by index")
+                .arg(Arg::with_name("index").required(true)),
+        )
+        .subcommand(SubCommand::with_name("cleanup").about("Clear checked tasks"))
+        .subcommand(SubCommand::with_name("clear").about("Clear all tasks"))
+        .get_matches();
 
-    let path = env::home_dir().unwrap().join("todo.txt");
+    let path = dirs::home_dir().unwrap().join("todo.txt");
     let mut todo_list = TodoList::load(&path).unwrap();
 
     if let Some(task) = args.value_of("task") {
@@ -270,10 +271,12 @@ fn main() {
     }
 
     match args.subcommand() {
-        ("ls", Some(matches)) => if matches.is_present("list all") {
-            todo_list.print_all();
-            return
-        },
+        ("ls", Some(matches)) => {
+            if matches.is_present("list all") {
+                todo_list.print_all();
+                return;
+            }
+        }
         ("cleanup", Some(_)) => todo_list.cleanup(),
         ("clear", Some(_)) => todo_list.clear(),
         (action, Some(matches)) => {
@@ -282,10 +285,10 @@ fn main() {
                 "remove" => todo_list.remove(i),
                 "check" => todo_list.check(i),
                 "undo" => todo_list.undo(i),
-                _ => {}
+                _ => ()
             }
         }
-        _ => {}
+        _ => ()
     };
 
     todo_list.print_unchecked();

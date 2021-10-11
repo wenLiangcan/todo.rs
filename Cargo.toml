@@ -1,10 +1,12 @@
 [package]
+edition = "2018"
 name = "todo"
 version = "0.2.0"
 authors = ["wenLiangcan <boxeed@gmail.com>"]
 
 [dependencies]
 ansi_term = "*"
-clap = "1.5.3"
-regex = "0.1.43"
+clap = "2.33.3"
+regex = "1.5.4"
 clippy = {version = "*", optional = true}
+dirs = "4.0.0"
