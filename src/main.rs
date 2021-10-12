@@ -115,8 +115,12 @@ where
     }
 }
 
-fn check_vec_bounds<T>(v: &[T], index: usize) -> bool {
-    v.get(index).map_or(false, |_| true)
+fn vec_try_remove<T>(v: &mut Vec<T>, index: usize) -> Option<T> {
+    if index < v.len() {
+        Some(v.remove(index))
+    } else {
+        None
+    }
 }
 
 struct TodoList<'p> {
@@ -130,24 +134,22 @@ impl<'p> TodoList<'p> {
             .read(true)
             .write(true)
             .create(true)
-            .open(&path);
+            .open(&path)?;
 
-        file.map(|f| {
-            let reader = BufReader::new(f);
-            let list: Vec<Task> = reader
-                .lines()
-                .enumerate()
-                .map(|(i, l)| match l {
-                    Ok(s) => s
-                        .parse::<Task>()
-                        .expect(&format!("Failed to parse line {}", i)),
-                    Err(e) => panic!("{:#?}", e),
-                })
-                .collect();
-            TodoList {
-                path: path,
-                list: list,
-            }
+        let reader = BufReader::new(file);
+        let list: Vec<Task> = reader
+            .lines()
+            .enumerate()
+            .map(|(i, l)| match l {
+                Ok(s) => s
+                    .parse::<Task>()
+                    .expect(&format!("Failed to parse line {}", i)),
+                Err(e) => panic!("{:#?}", e),
+            })
+            .collect();
+        Ok(TodoList {
+            path: path,
+            list: list,
         })
     }
 
@@ -164,49 +166,59 @@ impl<'p> TodoList<'p> {
         }
     }
 
-    fn add(&mut self, note: &str) {
-        let task = Task::new(note);
-        self.list.push(task);
+    fn modify<F>(&mut self, action: F)
+    where
+        F: FnOnce(&mut Vec<Task>),
+    {
+        action(&mut self.list);
         self.save();
+    }
+
+    fn add(&mut self, note: &str) {
+        self.modify(|l| {
+            let task = Task::new(note);
+            l.push(task);
+        })
     }
 
     fn check(&mut self, index: usize) {
         let i = index - 1;
-        if check_vec_bounds(&self.list, i) {
-            let t = self.list.remove(i);
-            self.list.insert(i, t.check());
-            self.save();
+        if let Some(t) = vec_try_remove(&mut self.list, i) {
+            self.modify(|l| {
+                l.insert(i, t.check());
+            })
         }
     }
 
     fn undo(&mut self, index: usize) {
         let i = index - 1;
-        if check_vec_bounds(&self.list, i) {
-            let t = self.list.remove(i);
-            self.list.insert(i, t.undo());
-            self.save();
+        if let Some(t) = vec_try_remove(&mut self.list, i) {
+            self.modify(|l| {
+                l.insert(i, t.undo());
+            })
         }
     }
 
     fn remove(&mut self, index: usize) {
         let i = index - 1;
-        if check_vec_bounds(&self.list, i) {
-            self.list.remove(i);
+        if let Some(_) = vec_try_remove(&mut self.list, i) {
             self.save();
         }
     }
 
     fn cleanup(&mut self) {
-        self.list.retain(|task| match task {
-            Task::TodoTask(_) => true,
-            _ => false,
-        });
-        self.save();
+        self.modify(|l| {
+            l.retain(|task| match task {
+                Task::TodoTask(_) => true,
+                _ => false,
+            });
+        })
     }
 
     fn clear(&mut self) {
-        self.list.clear();
-        self.save();
+        self.modify(|l| {
+            l.clear();
+        })
     }
 
     fn print_unchecked(&self) {
@@ -220,6 +232,8 @@ impl<'p> TodoList<'p> {
         filter_print_lines(self.list.iter(), |_| true);
     }
 }
+
+
 
 fn main() {
     let args = App::new("todo")
@@ -285,10 +299,10 @@ fn main() {
                 "remove" => todo_list.remove(i),
                 "check" => todo_list.check(i),
                 "undo" => todo_list.undo(i),
-                _ => ()
+                _ => (),
             }
         }
-        _ => ()
+        _ => (),
     };
 
     todo_list.print_unchecked();
