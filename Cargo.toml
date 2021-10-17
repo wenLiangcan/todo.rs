@@ -5,7 +5,7 @@ version = "0.2.0"
 authors = ["wenLiangcan <boxeed@gmail.com>"]
 
 [dependencies]
-ansi_term = "*"
+ansi_term = "0.12.1"
 clap = "2.33.3"
 regex = "1.5.4"
 clippy = {version = "*", optional = true}
